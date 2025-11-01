@@ -1,0 +1,79 @@
+
+  % Parámetros del problema
+  V0 = 1;         % Potencial en x=0 (CONDICION DE BORDE)
+  d = 1;          % Distancia total (PUNTO FINAL DEL INTERVALO [0,d])
+  p0  = 1;        % Densidad de carga
+  er = 1          % Constante dieléctrica relativa
+  e0 = 1          % Constante dieléctrica de vacío
+  h = 0.01;       % Tamaño de paso
+  N = d / h;      % Número de subintervalos
+  C = p0 / (er * e0);
+
+  % Coordenadas nodales
+  x = linspace(0, d, N+1)';
+
+  % Construcción de la matriz de rigidez K y el vector de carga F
+  K = zeros(N+1, N+1);
+  F = zeros(N+1, 1);
+ 
+  
+  for i = 2:N
+    K(i, i-1) = -1 / h;
+    K(i, i)   = 2 / h ;
+    K(i, i+1) = -1 / h ;
+    F(i) = -C * h;
+  end
+
+    
+
+  % Condiciones de borde
+  K(1, :) = 0;
+  K(1, 1) = 1;
+  F(1) = V0;
+
+  K(N+1, :) = 0;
+  K(N+1, N+1) = 1;
+  F(N+1) = 0;
+
+  % RESOLVEMOS EL SISTEMAK * V = F
+  V = K \ F;
+
+  % Mostramos los resultados
+fprintf('Resultados usando el metodo de diferencias finitas con N=%d y h=%.3f\n',N+1, h);
+fprintf('V1 (x=0) = %.6f\n',V0);
+for i = 1:N
+    xi = i * h;
+    fprintf('V%d (x=%.3f) = %.6f\n', i+1, xi, V(i));
+end
+
+
+
+% GRAFICA SOL NUMERICA
+  figure;
+  plot(x,V,'LineStyle', '-','Color', 'b','Marker', 'o','MarkerFaceColor', 'r','LineWidth', 2,'MarkerSize', 2);
+  hold on;
+  xlabel('Distancia (m)')
+  ylabel('Tension (V)')
+  titulo= sprintf('Solución por el metodo de Galerkin ( con tamaño de paso h = %.3f)', h);
+  title(titulo);
+  legend('show');
+  grid on;
+  hold off;
+
+% GRAFICA SOL ANALITICA
+
+Y_analitica = (p0 / (e0 * er)) * x.^2/2 + (( - p0 / (e0 * er)) * d/2 - V0/d) * x + V0;
+plot(x,Y_analitica,'r');
+title('Solución analítica');
+xlabel('Distancia (m)')
+ylabel('Tension (V)')
+grid on;
+
+% GRAFICA ERROR ABSOLUTO ENTRE SOLUCIONES
+
+error=abs(V'-Y_analitica')
+plot(x,error,'b');
+title('Error absoluto entre la solucion numerica y analitica');
+xlabel('Distancia (m)')
+ylabel('Tension (V)')
+grid on;

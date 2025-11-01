@@ -1,0 +1,74 @@
+% PARÁMETROS DEL PROBLEMA
+V0 = 1;         % Potencial en x=0 (CONDICION DE BORDE)
+d = 1;          % Distancia total (PUNTO FINAL DEL INTERVALO [0,d])
+p0 = 1;         % Densidad de carga
+er = 1          % Constante dieléctrica relativa
+e0 = 1          % Constante dieléctrica de vacío
+h = 0.01;       % Tamaño de paso
+n = d / h;      % Número de subintervalos
+C = p0 / (er * e0);
+K = C * h^2;  
+
+% MATRIZ A (COEFICIENTES)
+n = N - 1;
+A = zeros(n, n);
+for i = 1:n
+    A(i,i) = -2;
+    if i > 1
+        A(i, i-1) = 1;
+    end
+    if i < n
+        A(i, i+1) = 1;
+    end
+end
+
+% VECTOR B (TERMINOS INDEPENDIENTES)
+b = K * ones(n,1);
+b(1) = b(1) - V0;   % Condición de borde en V0
+
+
+% RESOLVEMOS EL SISTEMA
+V = A \ b;
+
+% Mostramos los resultados
+fprintf('Resultados usando el metodo de diferencias finitas con N=%d y h=%.3f \n',n+1, h);
+fprintf('V0 (x=0) = %.6f\n',V0);
+for i = 1:n
+    xi = i * h;
+    fprintf('V%d (x=%.3f) = %.6f\n', i, xi, V(i));
+end
+fprintf('V%d (x=1) = 0',n+1);
+
+
+% Graficamos la solución
+xi = [0: h: d]; 
+Y = [V0; V; 0]'; 
+close all;
+
+% GRAFICA SOL NUMERICA
+figure (1)
+
+plot(xi,Y,'LineStyle', '-','Color', 'b','Marker', 'o','MarkerFaceColor', 'r','LineWidth', 2,'MarkerSize', 2);
+titulo= sprintf('Solución por el metodo de diferencias Finitas ( con tamaño de paso h = %.3f)', h);
+title(titulo);
+xlabel('Distancia (m)')
+ylabel('Tension (V)')
+grid on;
+
+% GRAFICA SOL ANALITICA
+
+Y_analitica = (p0 / (e0 * er)) * xi.^2/2 + (( - p0 / (e0 * er)) * d/2 - V0/d) * xi + V0;
+plot(xi,Y_analitica,'r');
+title('Solución analítica');
+xlabel('Distancia (m)')
+ylabel('Tension (V)')
+grid on;
+
+% GRAFICA ERROR ABSOLUTO ENTRE SOLUCIONES
+
+error=abs(Y-Y_analitica)
+plot(xi,error,'b');
+title('Error absoluto entre la solucion numerica y analitica');
+xlabel('Distancia (m)')
+ylabel('Tension (V)')
+grid on;
