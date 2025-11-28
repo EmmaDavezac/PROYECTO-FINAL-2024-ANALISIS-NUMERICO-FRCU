@@ -1,0 +1,115 @@
+function V = ResolverLaplaceMDF(w, h_dim, N, V0)
+    % Parámetros de entrada:
+    % w: Ancho del dominio (eje x)
+    % h_dim: Altura del dominio (eje y) -> Le llamo h_dim para no confundir con el paso h
+    % N: Número de nodos en cada dirección (la malla será N x N)
+    % V0: Potencial en el borde superior
+
+    % 1. Definición de la malla
+    % ---------------------------------------------------------
+    dx = w / (N - 1);       % Paso en x
+    dy = h_dim / (N - 1);   % Paso en y (asumimos dx = dy = h como dice la teoría)
+    
+    x = linspace(0, w, N);
+    y = linspace(0, h_dim, N);
+    [X, Y] = meshgrid(x, y); % Creamos la rejilla para graficar luego
+
+    % 2. Inicialización del Sistema Lineal A*V = b
+    % ---------------------------------------------------------
+    num_nodos = N * N;              % Total de incógnitas
+    A = sparse(num_nodos, num_nodos); % Matriz dispersa para ahorrar memoria
+    b = zeros(num_nodos, 1);        % Vector de términos independientes
+
+    % 3. Ensamblaje de la Matriz A y el Vector b
+    % ---------------------------------------------------------
+    % Recorremos cada nodo (i, j) de la malla
+    % Nota: En MATLAB los índices de matriz son (fila, col), que corresponden a (y, x)
+    % Para ser consistentes con la teoría: i -> eje X (columnas), j -> eje Y (filas)
+    
+    for j = 1:N      % Recorre filas (Eje Y)
+        for i = 1:N  % Recorre columnas (Eje X)
+            
+            % Calculamos el índice único 'k' para el vector unidimensional V
+            % k mapea la coordenada (i,j) a una fila del sistema lineal de 1 a M
+            k = (i - 1) * N + j; 
+            
+            % --- Aplicación de Condiciones de Borde ---
+            
+            if i == 1 % Borde Izquierdo (V = 0)
+                A(k, k) = 1;
+                b(k) = 0;
+                
+            elseif i == N % Borde Derecho (V = 0)
+                A(k, k) = 1;
+                b(k) = 0;
+                
+            elseif j == 1 % Borde Inferior (V = 0)
+                A(k, k) = 1;
+                b(k) = 0;
+                
+            elseif j == N % Borde Superior (V = V0) -> Aquí está la fuente
+                A(k, k) = 1;
+                b(k) = V0;
+                
+            else
+                % --- Nodos Interiores (Ecuación de Laplace Discretizada) ---
+                % Ecuación: V(i-1,j) + V(i+1,j) + V(i,j-1) + V(i,j+1) - 4V(i,j) = 0
+                
+                % Nodo central (-4)
+                A(k, k) = -4; 
+                
+                % Vecinos (coeficiente +1)
+                % Nota: En el vector k, los vecinos son:
+                % Arriba/Abajo: k+1 / k-1 (porque avanzamos en j contiguamente)
+                % Derecha/Izquierda: k+N / k-N (porque saltamos una columna entera)
+                
+                A(k, k-1) = 1; % Vecino Inferior (j-1)
+                A(k, k+1) = 1; % Vecino Superior (j+1)
+                A(k, k-N) = 1; % Vecino Izquierdo (i-1)
+                A(k, k+N) = 1; % Vecino Derecho (i+1)
+            end
+        end
+    end
+
+    % 4. Resolución del Sistema
+    % ---------------------------------------------------------
+    V_vec = A \ b; % Resolvemos A * V_vec = b
+
+    % 5. Reestructuración para Gráficos
+    % ---------------------------------------------------------
+    % Convertimos el vector solución 1D de nuevo a una matriz 2D
+    V = reshape(V_vec, N, N);
+
+    % 6. Generación de Gráficos (Estilo TPs anteriores)
+    % ---------------------------------------------------------
+    
+    % Gráfico 1: Superficie 3D
+    figure('Name', 'Solución MDF - Superficie 3D');
+    surf(X, Y, V);
+    title(['Distribución del Potencial Eléctrico (MDF) - N = ', num2str(N)]);
+    xlabel('x');
+    ylabel('y');
+    zlabel('V(x,y)');
+    colormap('jet');
+    colorbar;
+    shading interp; % Suaviza los colores
+    view(45, 30);   % Ajusta la vista para que se vea bien la "caída"
+
+    % Gráfico 2: Curvas de Nivel
+    figure('Name', 'Solución MDF - Curvas de Nivel');
+    contourf(X, Y, V, 20); % 20 niveles de contorno
+    title(['Curvas de Nivel del Potencial - N = ', num2str(N)]);
+    xlabel('x');
+    ylabel('y');
+    colormap('jet');
+    colorbar;
+    axis equal; % Mantiene la proporción del rectángulo
+end
+% Parámetros del problema (según la consigna)
+w = 1.0;      % Ancho
+h_dim = 1.0;  % Alto (le llamo h_dim porque 'h' suele ser el paso)
+V0 = 100;     % Potencial en el borde superior (ejemplo 100V o 1V)
+N = 50;       % Número de nodos (puedes probar con 20, 50, 100)
+
+% Llamada a la función
+V_solucion = ResolverLaplaceMDF(w, h_dim, N, V0);
