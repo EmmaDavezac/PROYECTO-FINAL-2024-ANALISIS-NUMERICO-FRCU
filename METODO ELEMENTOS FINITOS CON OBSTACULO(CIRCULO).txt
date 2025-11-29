@@ -1,0 +1,92 @@
+function visualizeV(elements, nodes, V, gridX, gridY, w, h, r)
+    % --- PREPARAR EL CÍRCULO ---
+    % Creamos los puntos matemáticos del círculo para dibujarlo
+    theta = linspace(0, 2*pi, 200); % 200 puntos para que se vea suave
+    centerX = w/2;
+    centerY = h/2;
+    circleX = centerX + r * cos(theta);
+    circleY = centerY + r * sin(theta);
+    circleZ_3D = zeros(size(circleX)); % En 3D, el círculo está en el suelo (Z=0)
+
+    % --- GRÁFICO 1: Visualización 3D ---
+    figure(1);
+    % Dibujamos la superficie
+    trisurf(elements, nodes(:, 1), nodes(:, 2), V(:), 'EdgeColor', 'none', 'FaceColor', 'interp');
+    hold on; % ¡IMPORTANTE! Mantiene la gráfica anterior para dibujar encima
+
+    % Dibujamos el círculo rojo en el plano Z=0 con línea gruesa
+    plot3(circleX, circleY, circleZ_3D, 'r-', 'LineWidth', 3);
+
+    hold off; % Soltamos el gráfico
+    title('Distribución de Potencial 3D (con obstáculo)');
+    xlabel('X'); ylabel('Y'); zlabel('Potencial');
+    colorbar;
+    view(3); % Asegura una buena vista 3D
+
+    % --- GRÁFICO 2: Curvas de nivel (2D) ---
+    figure(2);
+    % Dibujamos los contornos
+    contourf(gridX, gridY, V, 20, 'LineColor', 'none');
+    hold on; % ¡IMPORTANTE! Mantiene los contornos para dibujar encima
+
+    % Dibujamos el círculo rojo encima
+    plot(circleX, circleY, 'r-', 'LineWidth', 3);
+
+    hold off; % Soltamos el gráfico
+    title('Curvas de Nivel 2D (con obstáculo)');
+    xlabel('X'); ylabel('Y');
+    colorbar;
+    axis equal; % Para que el círculo no se vea ovalado si la ventana no es cuadrada
+
+
+function V = EFC(w, h, N, V0, r)
+    % Generar malla
+    [gridX, gridY] = meshgrid(linspace(0, w, N), linspace(0, h, N));
+    nodes = [gridX(:), gridY(:)];
+    elements = delaunay(nodes(:, 1), nodes(:, 2));
+
+    numNodes = size(nodes, 1);
+    numTriangles = size(elements, 1);
+    stiffnessMatrix = sparse(numNodes, numNodes);
+    forceVector = zeros(numNodes, 1);
+
+    % Ensamblar matriz
+    for tri = 1:numTriangles
+        verts = elements(tri, :);
+        xCoords = nodes(verts, 1);
+        yCoords = nodes(verts, 2);
+
+        triangleArea = polyarea(xCoords, yCoords);
+        b = [yCoords(2) - yCoords(3); yCoords(3) - yCoords(1); yCoords(1) - yCoords(2)];
+        c = [xCoords(3) - xCoords(2); xCoords(1) - xCoords(3); xCoords(2) - xCoords(1)];
+
+        localStiffness = triangleArea * (b * b' + c * c');
+
+        % Operador += (funciona en Octave)
+        stiffnessMatrix(verts, verts) += localStiffness;
+    end
+
+    % Condiciones de borde
+    for node = 1:numNodes
+        px = nodes(node, 1);
+        py = nodes(node, 2);
+
+        if py == 0 || px == 0 || px == w || py == h || ((px - w/2)^2 + (py - h/2)^2 <= r^2)
+            stiffnessMatrix(node, :) = 0;
+            stiffnessMatrix(node, node) = 1;
+            forceVector(node) = (py == h) * V0;
+        end
+    end
+
+    % Resolver
+    VVector = stiffnessMatrix \ forceVector;
+    V = reshape(VVector, N, N);
+
+    % Llamar a la visualización
+    visualizeV(elements, nodes, V, gridX, gridY, w, h, r);
+end
+
+EFC(10, 10, 30, 100, 2);
+EFC(10, 10, 30, 100, 2);
+
+
