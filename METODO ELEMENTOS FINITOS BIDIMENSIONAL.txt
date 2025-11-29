@@ -1,0 +1,127 @@
+%=====================================================
+% 1. DEFINICIÓN DE PARÁMETROS DEL PROBLEMA
+%=====================================================
+clear all; close all; % Limpia el espacio de trabajo y cierra figuras
+W = 1.0; % Ancho del dominio (eje x)
+H = 1.0; % Altura del dominio (eje y)
+n = 50;  % Número de puntos/divisiones por lado (la malla de nodos será n x n)
+V0 = 1.0; % Potencial de frontera en el borde superior (Condición de Dirichlet)
+
+%=====================================================
+% 2. GENERACIÓN DE LA MALLA Y TOPOLOGÍA
+%=====================================================
+% Crea la rejilla de coordenadas para los nodos.
+[X, Y] = meshgrid(linspace(0, W, n), linspace(0, H, n));
+
+% Lista de coordenadas de los nodos N = [x, y]
+Nodes = [X(:), Y(:)]; 
+
+% Triangulación de Delaunay para definir la conectividad entre nodos (matriz T)
+T = delaunay(Nodes(:, 1), Nodes(:, 2)); 
+
+% Inicialización del sistema global K*V = F
+m = size(Nodes, 1);   % Número total de nodos
+K = sparse(m, m);   % Matriz de Rigidez Global (esparsa)
+F = zeros(m, 1);    % Vector de Fuerzas/Carga (aquí es cero, ya que no hay fuentes)
+e = size(T, 1);     % Número total de elementos triangulares
+
+%=====================================================
+% 3. CONSTRUCCIÓN Y ENSAMBLAJE DE LA MATRIZ DE RIGIDEZ K
+%=====================================================
+% Itera sobre cada elemento triangular (e)
+for i = 1:e
+    % Extrae los índices de los 3 nodos del elemento
+    nodes_idx = T(i, :); 
+    
+    % Coordenadas x e y de los nodos del elemento
+    x = Nodes(nodes_idx, 1); 
+    y = Nodes(nodes_idx, 2);
+    
+    areaT = polyarea(x, y); % Cálculo del área del triángulo
+    
+    % Coeficientes b y c de las funciones de forma lineal (para gradientes)
+    % grad(N_i) = (1/(2*areaT)) * [b_i; c_i]
+    b1 = y(2) - y(3); b2 = y(3) - y(1); b3 = y(1) - y(2);
+    c1 = x(3) - x(2); c2 = x(1) - x(3); c3 = x(2) - x(1);
+    
+    % Arreglos de b's y c's para el cálculo matricial
+    b = [b1; b2; b3];
+    c = [c1; c2; c3];
+    
+    % Matriz de Rigidez Local (K_local) para la Ecuación de Laplace:
+    % K_local = (1/(4*areaT)) * (b*b' + c*c')
+    
+    % Se ajusta la fórmula original del código para la corrección matemática:
+    % El término A en el código original es A = areaT * (b*b' + c*c')
+    % Por lo tanto, A / (4 * areaT^2) simplifica a (b*b' + c*c') / (4 * areaT)
+    K_local = (b * b' + c * c') / (4 * areaT); 
+
+    % Ensamblaje: Suma la matriz local a las posiciones globales de K
+    K(nodes_idx, nodes_idx) = K(nodes_idx, nodes_idx) + K_local;
+end
+
+%=====================================================
+% 4. APLICACIÓN DE LAS CONDICIONES DE FRONTERA (DIRICHLET)
+%=====================================================
+% Itera sobre cada nodo (m) para aplicar las condiciones de borde
+for i = 1:m
+    x_i = Nodes(i, 1);
+    y_i = Nodes(i, 2);
+    is_boundary = false;
+    V_value = 0; % Potencial por defecto para V=0
+    
+    % Condición V = 0 en borde inferior (y=0), izquierdo (x=0) y derecho (x=W)
+    if y_i == 0 || x_i == 0 || x_i == W
+        is_boundary = true;
+    end
+    
+    % Condición V = V0 en borde superior (y=H)
+    if y_i == H
+        is_boundary = true;
+        V_value = V0;
+    end
+    
+    % Si el nodo está en la frontera, forzamos la solución V(i) = V_value
+    if is_boundary
+        K(i, :) = 0; % Anula la fila para desacoplar de los vecinos
+        K(i, i) = 1; % Fija el valor de la diagonal (fuerza 1*V(i))
+        F(i) = V_value; % Fija el lado derecho (fuerza 1*V(i) = V_value)
+    end
+end
+
+%=====================================================
+% 5. RESOLUCIÓN DEL SISTEMA
+%=====================================================
+% Resuelve el sistema lineal de ecuaciones K * V_vec = F
+V_vec = K \ F; 
+
+% Reorganiza el vector solución 1D (V_vec) a una matriz 2D (V) para 'contourf'
+V = reshape(V_vec, n, n); 
+
+%=====================================================
+% 6. POST-PROCESAMIENTO Y GRÁFICOS
+%=====================================================
+
+%--- Gráfico 1: Superficie 3D ---
+figure;
+% trisurf requiere la matriz de conectividad (T), las coordenadas (N), y el vector solución (V_vec)
+trisurf(T, Nodes(:, 1), Nodes(:, 2), V_vec, 'EdgeColor', 'none', 'FaceColor', 'interp'); 
+title(['Distribución del Potencial Eléctrico (MEF) - N = ', num2str(n)]);
+xlabel('x');
+ylabel('y');
+zlabel('V(x,y)');
+colormap('jet');
+colorbar;
+shading interp; % Suaviza los colores
+view(45, 30);   % Ajusta la vista para que se vea bien la "caída"
+
+%--- Gráfico 2: Curvas de Nivel (Contornos) ---
+figure;
+% contourf requiere la grilla 2D (X, Y) y la matriz solución 2D (V)
+contourf(X, Y, V, 20, 'LineColor', 'none'); 
+colormap('jet');
+title(['Curvas de Nivel del Potencial - N = ', num2str(n)]);
+xlabel('x');
+ylabel('y');
+colorbar;
+axis equal tight;

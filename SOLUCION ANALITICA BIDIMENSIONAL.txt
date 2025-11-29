@@ -1,0 +1,63 @@
+   % Parámetros de entrada:
+    W = 1.0; % Ancho del dominio (eje x)
+    H = 1.0; % Altura del dominio (eje y)
+    N = 50;  % Número de puntos/divisiones por lado (la malla de nodos será n x n)
+    V0 = 1.0; % Potencial de frontera en el borde superior (Condición de Dirichlet)
+
+% Crear matriz inicial de resultados
+U = zeros(N, N); % Inicialización a ceros
+
+% Coordenadas espaciales
+x_vals = linspace(0, W, N); % Eje X
+y_vals = linspace(0, H, N); % Eje Y
+
+max_terms = 100; % Términos a considerar
+
+% Computar potencial eléctrico en cada punto de la malla
+for idx_x = 1:N
+    for idx_y = 1:N
+        serie_sum = 0; % Acumulador de la serie
+        for term_idx = 1:max_terms
+            impar = 2*term_idx - 1; % Término impar
+            
+            % Calcular término de la serie
+            elemento = (4 * V0 / pi) * (sin(impar * pi * x_vals(idx_x) / W) * ...
+                       sinh(impar * pi * y_vals(idx_y) / W)) / (impar * sinh(impar * pi * H / W));
+            serie_sum = serie_sum + elemento; % Sumar el término
+        end
+        U(idx_x, idx_y) = serie_sum; % Asignar valor
+    end
+end
+
+
+% x_vals: Vector con las coordenadas en el eje X
+% y_vals: Vector con las coordenadas en el eje Y
+% U: Matriz de potencial eléctrico
+% H: Altura de la caja (para ajustar los límites)
+
+% Crear malla para las gráficas
+% Gráfica tridimensional
+% Generar malla para gráficas
+[MeshX, MeshY] = meshgrid(x_vals, y_vals);
+
+% Gráfica tridimensional
+figure;
+surf(MeshX, MeshY, U');
+title('Potencial Eléctrico - Solución Analítica');
+xlabel('x');
+ylabel('y');
+zlabel('u(x,y)');
+colormap('jet');
+colorbar;
+view(45, 30);   % Ajusta la vista para que se vea bien la "caída"
+ylim([0, H]);
+
+% Gráfica de contornos
+figure;
+contourf(MeshX, MeshY, U', 20, 'LineColor', 'none');
+title('Contornos del Potencial Eléctrico');
+xlabel('x');
+ylabel('y');
+colormap('jet');
+colorbar;
+

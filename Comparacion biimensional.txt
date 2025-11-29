@@ -1,0 +1,213 @@
+
+
+
+H = 1;  % H: Altura de la caja (Eje Y)
+W = 1; % W: Ancho de la caja (Eje X)
+N = 40; % N: Número de puntosde la malla
+V0 = 1;% V0: Potencial en el borde superior
+
+
+function U = SolucionAnalitica(W, H, N, V0)
+% Crear matriz inicial de resultados
+U = zeros(N, N); % Inicialización a ceros
+
+% Coordenadas espaciales
+x_vals = linspace(0, W, N); % Eje X
+y_vals = linspace(0, H, N); % Eje Y
+
+max_terms = 100; % Términos a considerar
+
+% Computar potencial eléctrico en cada punto de la malla
+for idx_x = 1:N
+    for idx_y = 1:N
+        serie_sum = 0; % Acumulador de la serie
+        for term_idx = 1:max_terms
+            impar = 2*term_idx - 1; % Término impar
+            
+            % Calcular término de la serie
+            elemento = (4 * V0 / pi) * (sin(impar * pi * x_vals(idx_x) / W) * ...
+                       sinh(impar * pi * y_vals(idx_y) / W)) / (impar * sinh(impar * pi * H / W));
+            serie_sum = serie_sum + elemento; % Sumar el término
+        end
+        U(idx_x, idx_y) = serie_sum; % Asignar valor
+    end
+end
+end
+
+function V = ElementosFinitos(W, H, N, V0)
+% Generación de la malla sobre el dominio rectangular
+[x, y] = meshgrid(linspace(0, W, N), linspace(0, H, N));
+Nodos = [x(:), y(:)]; % Lista de coordenadas de los N
+T = delaunay(N(:, 1), N(:, 2)); % Triangulación de Delaunay de los N
+
+N = size(N, 1); % Número de N
+K = sparse(N, N); % Matriz de rigidez (inicializada como esparsa)
+F = zeros(N, 1); % Vector de fuerzas (inicializado a cero)
+e = size(T, 1); % Número de elementos triangulares
+
+% Construcción de la matriz de rigidez K
+for i = 1:e
+    x = N(T(i, :), 1); % Coordenadas x de los N del triángulo
+    y = N(T(i, :), 2); % Coordenadas y de los N del triángulo
+    areaT = polyarea(x, y); % Cálculo del área del triángulo
+    
+    % Coeficientes de la matriz A (basados en las derivadas de la función base)
+    b1 = y(2) - y(3);
+    b2 = y(3) - y(1);
+    b3 = y(1) - y(2);
+    c1 = x(3) - x(2);
+    c2 = x(1) - x(3);
+    c3 = x(2) - x(1);
+    
+    % Matriz A para este triángulo
+    A = areaT * [b1 * c1 + c1 * b1, b1 * c2 + c2 * b1, b1 * c3 + c3 * b1;
+                 b2 * b1 + c1 * b2, b2 * c2 + c2 * b2, b2 * c3 + c3 * b2;
+                 b3 * b1 + c3 * b3, b3 * c2 + c2 * b3, b3 * c3 + c3 * b3] / (2 * areaT)^2;
+
+    nodes = T(i, :); % Índices de los N que conforman el triángulo
+    % Actualización de la matriz de rigidez K
+    K(nodes, nodes) = K(nodes, nodes) + A;
+end
+
+% Aplicación de las condiciones de frontera
+for i = 1:N
+    % Condición de frontera en el borde inferior (y = 0)
+    if N(i, 2) == 0
+        K(i, :) = 0; % Anular la fila i de la matriz K
+        K(i, i) = 1; % Poner un 1 en la diagonal
+        F(i) = 0; % Potencial igual a 0 en este nodo
+    end
+    
+    % Condición de frontera en el borde izquierdo (x = 0)
+    if N(i, 1) == 0
+        K(i, :) = 0;
+        K(i, i) = 1;
+        F(i) = 0;
+    end
+    
+    % Condición de frontera en el borde derecho (x = W)
+    if N(i, 1) == W
+        K(i, :) = 0;
+        K(i, i) = 1;
+        F(i) = 0;
+    end
+    
+    % Condición de frontera en el borde superior (y = H)
+    if N(i, 2) == H
+        K(i, :) = 0;
+        K(i, i) = 1;
+        F(i) = V0; % Potencial V0 en el borde superior
+    end
+end
+
+% Resolución del sistema de ecuaciones lineales
+V = K \ F; % Solución del sistema K * V = F
+V = reshape(V, N, N); % Reorganizar el vector V en una matriz 2D
+
+end
+
+function V = DiferenciasFinitas(W, H, N, V0)
+% W: Dimensión horizontal de la caja
+% H: Dimensión vertical de la caja
+% N: Cantidad de puntos en cada dirección
+% V0: Valor del potencial en el borde superior
+
+% Definición de la malla
+pasoX = W / (N-1); % Incremento en x
+pasoY = H / (N-1); % Incremento en y
+coordX = linspace(0, W, N); % Valores de x
+coordY = linspace(0, H, N); % Valores de y
+
+% Configuración inicial para el sistema lineal
+totalPuntos = N * N; % Total de N en la malla
+matrizCoef = -4 * eye(totalPuntos); % Matriz principal inicial
+vectorIndep = zeros(totalPuntos, 1); % Vector de términos independientes
+
+% Configuración de conexiones entre N
+for punto = 1:totalPuntos
+    if mod(punto, N) ~= 1
+        matrizCoef(punto, punto-1) = 1; % Conexión izquierda
+    end
+    
+    if mod(punto, N) ~= 0
+        matrizCoef(punto, punto+1) = 1; % Conexión derecha
+    end
+    
+    if punto > N
+        matrizCoef(punto, punto-N) = 1; % Conexión superior
+    end
+    
+    if punto <= totalPuntos - N
+        matrizCoef(punto, punto+N) = 1; % Conexión inferior
+    end
+end
+
+% Aplicar las condiciones de frontera
+for borde = 1:N
+    % Borde inferior (y = 0)
+    matrizCoef(borde, :) = 0;
+    matrizCoef(borde, borde) = 1;
+    
+    % Borde izquierdo (x = 0)
+    matrizCoef(borde, :) = 0;
+    matrizCoef(borde, borde) = 1;
+    
+    % Borde derecho (x = W)
+    indiceDer = borde + (N-1) * N;
+    matrizCoef(indiceDer, :) = 0;
+    matrizCoef(indiceDer, indiceDer) = 1;
+    
+    % Borde superior (y = H)
+    indiceSup = totalPuntos - N + borde;
+    matrizCoef(indiceSup, :) = 0;
+    matrizCoef(indiceSup, indiceSup) = 1;
+    vectorIndep(indiceSup) = V0;
+end
+
+% Resolución del sistema
+solucion = matrizCoef \ vectorIndep;
+
+% Reorganizar solución en formato bidimensional
+V = reshape(solucion, N, N);
+
+end
+
+% Parametros de prueba
+W = 1; H = 1; M = 20; V0 = 1;
+% Solucion Analitica
+SOL_analitica = SolucionAnalitica(W, H, M, V0);
+
+% solucion Diferencias Finitas
+SOL_MDF = DiferenciasFinitas(W, H, M, V0); 
+
+% solucion Elementos Finitos
+SOL_MEF = ElementosFinitos(W, H, M, V0); 
+
+%CÁLCULO DE ERRORES ABSOLUTOS
+Error_Absoluto_MDF = abs(SOL_analitica - SOL_MDF);
+Error_Absoluto_MEF = abs(SOL_analitica - SOL_MEF);
+
+%CÁLCULO DEL ERROR MÁXIMO 
+Error_Maximo_MDF = max(Error_Absoluto_MDF(:));
+Error_Maximo_MEF = max(Error_Absoluto_MEF(:));
+
+%CÁLCULO DEL ERROR MEDIO (RMSE - Root Mean Square Error) ---
+N_puntos = numel(SOL_analitica);
+
+% RMSE para Diferencias Finitas
+RMSE_MDF = sqrt(sum(Error_Absoluto_MDF(:).^2) / N_puntos);
+
+% RMSE para Elementos Finitos
+RMSE_MEF = sqrt(sum(Error_Absoluto_MEF(:).^2) / N_puntos);
+
+%PRESENTACIÓN DE RESULTADOS
+
+fprintf('\n--- Comparación de Errores para M = %d ---\n', M);
+
+fprintf('Método de Diferencias Finitas (MDF):\n');
+fprintf('  > Error Máximo Absoluto: %e\n', Error_Maximo_MDF);
+fprintf('  > Error Medio (RMSE):    %e\n', RMSE_MDF);
+
+fprintf('\nMétodo de Elementos Finitos (MEF):\n');
+fprintf('  > Error Máximo Absoluto: %e\n', Error_Maximo_MEF);
+fprintf('  > Error Medio (RMSE):    %e\n', RMSE_MEF);
