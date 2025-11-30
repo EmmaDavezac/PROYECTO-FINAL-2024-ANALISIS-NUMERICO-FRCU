@@ -1,10 +1,6 @@
 
 
 
-H = 1;  % H: Altura de la caja (Eje Y)
-W = 1; % W: Ancho de la caja (Eje X)
-N = 40; % N: Número de puntosde la malla
-V0 = 1;% V0: Potencial en el borde superior
 
 
 function U = SolucionAnalitica(W, H, N, V0)
@@ -34,76 +30,82 @@ for idx_x = 1:N
 end
 end
 
-function V = ElementosFinitos(W, H, N, V0)
-% Generación de la malla sobre el dominio rectangular
-[x, y] = meshgrid(linspace(0, W, N), linspace(0, H, N));
-Nodos = [x(:), y(:)]; % Lista de coordenadas de los N
-T = delaunay(N(:, 1), N(:, 2)); % Triangulación de Delaunay de los N
+function V = ElementosFinitos(W, H, N_in, V0)
+% N_in: Cantidad de puntos en cada dirección (M en el script principal)
 
-N = size(N, 1); % Número de N
-K = sparse(N, N); % Matriz de rigidez (inicializada como esparsa)
-F = zeros(N, 1); % Vector de fuerzas (inicializado a cero)
+% 1. Generación de la malla y Triangulación
+[x, y] = meshgrid(linspace(0, W, N_in), linspace(0, H, N_in));
+Nodos = [x(:), y(:)]; % Lista de coordenadas (N_count x 2)
+% CORRECCIÓN: Usar 'Nodos' en lugar de 'N' para la triangulación
+T = delaunay(Nodos(:, 1), Nodos(:, 2)); 
+
+N_count = size(Nodos, 1); % Número total de Nodos
+K = sparse(N_count, N_count); % Matriz de rigidez
+F = zeros(N_count, 1); % Vector de fuerzas
 e = size(T, 1); % Número de elementos triangulares
 
-% Construcción de la matriz de rigidez K
+% 2. Construcción de la matriz de rigidez K
 for i = 1:e
-    x = N(T(i, :), 1); % Coordenadas x de los N del triángulo
-    y = N(T(i, :), 2); % Coordenadas y de los N del triángulo
-    areaT = polyarea(x, y); % Cálculo del área del triángulo
+    x_tri = Nodos(T(i, :), 1); % Coordenadas x del triángulo
+    y_tri = Nodos(T(i, :), 2); % Coordenadas y del triángulo
+    areaT = polyarea(x_tri, y_tri); % Cálculo del área
     
-    % Coeficientes de la matriz A (basados en las derivadas de la función base)
-    b1 = y(2) - y(3);
-    b2 = y(3) - y(1);
-    b3 = y(1) - y(2);
-    c1 = x(3) - x(2);
-    c2 = x(1) - x(3);
-    c3 = x(2) - x(1);
+    % Coeficientes de la matriz A
+    b1 = y_tri(2) - y_tri(3);
+    b2 = y_tri(3) - y_tri(1);
+    b3 = y_tri(1) - y_tri(2);
+    c1 = x_tri(3) - x_tri(2);
+    c2 = x_tri(1) - x_tri(3);
+    c3 = x_tri(2) - x_tri(1);
     
-    % Matriz A para este triángulo
-    A = areaT * [b1 * c1 + c1 * b1, b1 * c2 + c2 * b1, b1 * c3 + c3 * b1;
-                 b2 * b1 + c1 * b2, b2 * c2 + c2 * b2, b2 * c3 + c3 * b2;
-                 b3 * b1 + c3 * b3, b3 * c2 + c2 * b3, b3 * c3 + c3 * b3] / (2 * areaT)^2;
+    % CORRECCIÓN: Fórmula correcta para la Matriz de Rigidez Local A
+    A = (1 / (4 * areaT)) * [
+        b1*b1 + c1*c1, b1*b2 + c1*c2, b1*b3 + c1*c3;
+        b2*b1 + c2*c1, b2*b2 + c2*c2, b2*b3 + c2*c3;
+        b3*b1 + c3*c1, b3*b2 + c3*c2, b3*b3 + c3*c3
+    ];
 
-    nodes = T(i, :); % Índices de los N que conforman el triángulo
-    % Actualización de la matriz de rigidez K
+    nodes = T(i, :); % Índices de los Nodos del triángulo
     K(nodes, nodes) = K(nodes, nodes) + A;
 end
 
-% Aplicación de las condiciones de frontera
-for i = 1:N
+% 3. Aplicación de las condiciones de frontera
+for i = 1:N_count
+    % Las condiciones se aplican usando la matriz Nodos.
+    
     % Condición de frontera en el borde inferior (y = 0)
-    if N(i, 2) == 0
-        K(i, :) = 0; % Anular la fila i de la matriz K
-        K(i, i) = 1; % Poner un 1 en la diagonal
-        F(i) = 0; % Potencial igual a 0 en este nodo
+    if Nodos(i, 2) == 0
+        K(i, :) = 0; 
+        K(i, i) = 1; 
+        F(i) = 0; 
     end
     
     % Condición de frontera en el borde izquierdo (x = 0)
-    if N(i, 1) == 0
+    if Nodos(i, 1) == 0
         K(i, :) = 0;
         K(i, i) = 1;
         F(i) = 0;
     end
     
     % Condición de frontera en el borde derecho (x = W)
-    if N(i, 1) == W
+    if Nodos(i, 1) == W
         K(i, :) = 0;
         K(i, i) = 1;
         F(i) = 0;
     end
     
     % Condición de frontera en el borde superior (y = H)
-    if N(i, 2) == H
+      if Nodos(i, 2) == H
         K(i, :) = 0;
         K(i, i) = 1;
-        F(i) = V0; % Potencial V0 en el borde superior
+        F(i) = V0; 
     end
 end
 
-% Resolución del sistema de ecuaciones lineales
-V = K \ F; % Solución del sistema K * V = F
-V = reshape(V, N, N); % Reorganizar el vector V en una matriz 2D
-
+% 4. Resolución y Reorganización
+V_vector = K \ F; 
+% Se reorganiza como matriz N_in x N_in, y se transpone para coincidir con meshgrid
+V = reshape(V_vector, N_in, N_in)';
 end
 
 function V = DiferenciasFinitas(W, H, N, V0)
@@ -173,15 +175,15 @@ V = reshape(solucion, N, N);
 end
 
 % Parametros de prueba
-W = 1; H = 1; M = 20; V0 = 1;
+W = 1; H = 1; N = 50; V0 = 1;
 % Solucion Analitica
-SOL_analitica = SolucionAnalitica(W, H, M, V0);
+SOL_analitica = SolucionAnalitica(W, H, N, V0);
 
 % solucion Diferencias Finitas
-SOL_MDF = DiferenciasFinitas(W, H, M, V0); 
+SOL_MDF = DiferenciasFinitas(W, H, N, V0); 
 
 % solucion Elementos Finitos
-SOL_MEF = ElementosFinitos(W, H, M, V0); 
+SOL_MEF = ElementosFinitos(W, H, N, V0); 
 
 %CÁLCULO DE ERRORES ABSOLUTOS
 Error_Absoluto_MDF = abs(SOL_analitica - SOL_MDF);
@@ -202,7 +204,7 @@ RMSE_MEF = sqrt(sum(Error_Absoluto_MEF(:).^2) / N_puntos);
 
 %PRESENTACIÓN DE RESULTADOS
 
-fprintf('\n--- Comparación de Errores para M = %d ---\n', M);
+fprintf('\n--- Comparación de Errores para N = %d ---\n', N);
 
 fprintf('Método de Diferencias Finitas (MDF):\n');
 fprintf('  > Error Máximo Absoluto: %e\n', Error_Maximo_MDF);
@@ -211,3 +213,40 @@ fprintf('  > Error Medio (RMSE):    %e\n', RMSE_MDF);
 fprintf('\nMétodo de Elementos Finitos (MEF):\n');
 fprintf('  > Error Máximo Absoluto: %e\n', Error_Maximo_MEF);
 fprintf('  > Error Medio (RMSE):    %e\n', RMSE_MEF);
+
+% --- CÓDIGO DE GRÁFICAS ---
+
+% 1. Preparación de las coordenadas de la malla
+X_vals = linspace(0, W, N);
+Y_vals = linspace(0, H, N);
+[X, Y] = meshgrid(X_vals, Y_vals);
+
+
+% -------------------------------------------------------------------------
+% GRÁFICA SUPERFICIE DE ERROR 
+% -------------------------------------------------------------------------
+figure(2);
+
+subplot(1, 2, 1);
+surf(X, Y, Error_Absoluto_MDF, 'EdgeColor', 'none');
+title('Error Absoluto MDF');
+xlabel('Eje X');
+ylabel('Eje Y');
+zlabel('Error');
+colorbar;
+view(-45, 45); % Vista en ángulo para 3D
+axis tight;
+set(gca, 'FontSize', 10);
+
+subplot(1, 2, 2);
+surf(X, Y, Error_Absoluto_MEF, 'EdgeColor', 'none');
+title('Error Absoluto MEF');
+xlabel('Eje X');
+ylabel('Eje Y');
+zlabel('Error');
+colorbar;
+view(-45, 45);
+axis tight;
+set(gca, 'FontSize', 10);
+
+sgtitle(['Comparación de Superficies de Error para N = ', num2str(N)], 'FontSize', 14, 'FontWeight', 'bold');
