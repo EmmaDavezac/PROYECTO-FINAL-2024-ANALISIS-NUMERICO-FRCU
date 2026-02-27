@@ -38,7 +38,7 @@ function visualizeV(elements, nodes, V, gridX, gridY, w, h, r)
     colorbar;
     axis equal; % Para que el círculo no se vea ovalado si la ventana no es cuadrada
 
-
+ %r radio
 function V = EFC(w, h, N, V0, r)
     % Generar malla
     [gridX, gridY] = meshgrid(linspace(0, w, N), linspace(0, h, N));
